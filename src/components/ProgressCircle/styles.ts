@@ -19,6 +19,8 @@ export const styles = StyleSheet.create({
     height: '100%',
   },
   labelContainer: {
+    position: 'absolute',
+
     width: '90%',
     alignItems: 'center',
     justifyContent: 'center',

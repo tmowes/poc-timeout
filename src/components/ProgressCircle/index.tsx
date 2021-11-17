@@ -19,82 +19,68 @@ import Svg, { Circle } from 'react-native-svg'
 
 import { circleSize, styles } from './styles'
 
-const CIRCLE_LENGTH = 1000
-const R = CIRCLE_LENGTH / (2 * Math.PI)
-
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
+const CIRCLE_LENGTH = 1000
+const R = CIRCLE_LENGTH / (2 * Math.PI)
 const svgViewBox = circleSize + 64
 
 export default function ProgressCircle() {
+  const [count, setCount] = useState(0)
   const progress = useSharedValue(0)
   const loop = useSharedValue(0)
   const whiteBorder = useSharedValue(0)
   const innerBorder = useSharedValue(0)
   const innerWhiteDashes = useSharedValue(0)
 
-  const [isActive, setIsActive] = useState(false)
-  const [count, setCount] = useState(0)
+  const onStart = useSharedValue(false)
+  const onActive = useSharedValue(false)
+  const onCancel = useSharedValue(true)
+  const onEnd = useSharedValue(true)
 
   const updateCount = useCallback(() => {
-    setIsActive(false)
-  }, [])
+    console.log('updateCount', count)
+    onCancel.value = false
+  }, [count, onCancel])
 
   const runTimeout = useCallback(() => {
-    setIsActive(true)
-    progress.value = withTiming(0, { duration: 10000 }, (isFinished: boolean) => {
+    // onCancel.value = true
+    progress.value = withTiming(0, { duration: 2000 }, (isFinished: boolean) => {
       if (isFinished) {
-        // console.log('end => runTimeout', isFinished, count)
-        runOnJS(updateCount)()
+        console.log('end => runTimeout', count)
+        onCancel.value = true
+        onStart.value = false
+        onActive.value = false
+        // runOnJS(updateCount)()
       }
     })
-  }, [progress, updateCount])
+  }, [count, onActive, onCancel, onStart, progress])
 
   const runProgress = useCallback(() => {
-    if (isActive) {
-      progress.value = withTiming(0, { duration: 200 }, (isFinished: boolean) => {
-        if (isFinished) {
-          // console.log('init => updateCount', isFinished, count)
-          runOnJS(updateCount)()
-        }
-      })
-    } else {
-      progress.value = withTiming(0.5, { duration: 200 }, (isFinished: boolean) => {
-        if (isFinished) {
-          // console.log('init => runTimeout', isFinished, count)
-          runOnJS(runTimeout)()
-        }
-      })
+    console.log('runProgress')
+    if (onEnd.value || onCancel.value) {
+      onEnd.value = false
+      console.log('onEnd.value || onCancel.value')
+      if (onActive.value) {
+        console.log('onActive.value')
+      }
+      if (!onStart.value) {
+        onStart.value = true
+        onActive.value = true
+        progress.value = withTiming(0.5, { duration: 200 }, () => runOnJS(runTimeout)())
+        console.log('onStart.value')
+      }
     }
-  }, [isActive, progress, runTimeout, updateCount])
+  }, [onActive, onCancel.value, onEnd, onStart, progress, runTimeout])
 
-  const decrementCount = () => setCount((prev) => prev - 1)
-
-  const incrementCount = () => setCount((prev) => prev + 1)
-
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: -(CIRCLE_LENGTH - CIRCLE_LENGTH * progress.value * 2),
-  }))
-
-  const animatedRotation = useAnimatedStyle(() => ({
-    transform: [{ rotateZ: `${90 + progress.value * 360}deg` }],
-  }))
-
-  const animatedOrangeDashes = useAnimatedProps(() => ({
-    strokeDashoffset: -(CIRCLE_LENGTH - CIRCLE_LENGTH * progress.value * 2),
-    strokeOpacity: innerBorder.value,
-  }))
-  const animatedWhiteDashes = useAnimatedProps(() => ({
-    strokeOpacity: innerWhiteDashes.value,
-  }))
-
-  const animatedOutter = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(whiteBorder.value, [1, 0], ['#ffffffff', '#ffffff00']),
-    borderWidth: 1,
-    transform: [{ rotateZ: `${90 + loop.value * 360}deg` }],
-  }))
-
-  // console.log('count =>', count)
+  const updateCountTarget = (step = 1) => {
+    setCount((prev) => prev + step)
+    progress.value = withTiming(0.5, { duration: 200 }, (isFinished: boolean) => {
+      if (isFinished) {
+        runOnJS(runTimeout)()
+      }
+    })
+  }
 
   useEffect(() => {
     whiteBorder.value = withRepeat(
@@ -177,14 +163,43 @@ export default function ProgressCircle() {
     return () => cancelAnimation(loop)
   }, [loop])
 
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: -(CIRCLE_LENGTH - CIRCLE_LENGTH * progress.value * 2),
+  }))
+
+  const animatedRotation = useAnimatedStyle(() => ({
+    transform: [{ rotateZ: `${90 + progress.value * 360}deg` }],
+  }))
+
+  const animatedOrangeDashes = useAnimatedProps(() => ({
+    strokeDashoffset: -(CIRCLE_LENGTH - CIRCLE_LENGTH * progress.value * 2),
+    strokeOpacity: innerBorder.value,
+  }))
+
+  const animatedWhiteDashes = useAnimatedProps(() => ({
+    strokeOpacity: innerWhiteDashes.value,
+  }))
+
+  const animatedOutter = useAnimatedStyle(() => ({
+    borderWidth: 1,
+    transform: [{ rotateZ: `${90 + loop.value * 360}deg` }],
+    borderColor: interpolateColor(whiteBorder.value, [1, 0], ['#ffffffff', '#ffffff00']),
+  }))
+
+  const centerContainer1 = useAnimatedStyle(() => ({
+    opacity: onStart.value ? 1 : 0,
+  }))
+
+  const centerContainer = useAnimatedStyle(() => ({
+    opacity: onStart.value ? 1 : 0,
+  }))
+
   return (
     <>
-      {isActive && (
-        <View style={styles.labelContainer}>
-          <Text style={styles.label}>Contador Alvo</Text>
-          <Text style={styles.text}>{count}</Text>
-        </View>
-      )}
+      <Animated.View style={[styles.labelContainer, centerContainer1]}>
+        <Text style={styles.label}>Contador Alvo</Text>
+        <Text style={styles.text}>{count}</Text>
+      </Animated.View>
       <Animated.View style={[styles.animatedCircle, animatedOutter]}>
         <Svg
           width={circleSize + 10}
@@ -206,15 +221,16 @@ export default function ProgressCircle() {
             cx={svgViewBox / (2 * 0.93)}
             cy={svgViewBox / (2 * 0.93)}
             r={R}
-            stroke="white"
+            stroke="aliceblue"
             strokeWidth={10}
-            strokeDasharray={CIRCLE_LENGTH / 1000}
+            strokeDasharray={CIRCLE_LENGTH / 400}
+            strokeDashoffset={90}
             animatedProps={animatedWhiteDashes}
           />
         </Svg>
       </Animated.View>
 
-      <Animated.View style={[styles.svgContainer, animatedRotation]}>
+      <Animated.View style={[animatedRotation]}>
         <Svg
           width={circleSize}
           height={circleSize}
@@ -225,8 +241,8 @@ export default function ProgressCircle() {
             cx={svgViewBox / (2 * 0.9)}
             cy={svgViewBox / (2 * 0.9)}
             r={R}
-            stroke="#ffffff"
-            strokeWidth={16}
+            stroke="orange"
+            strokeWidth={8}
             strokeDasharray={CIRCLE_LENGTH}
             strokeLinecap="round"
             strokeLinejoin="bevel"
@@ -237,24 +253,22 @@ export default function ProgressCircle() {
       <RectButton style={styles.button} onPress={runProgress}>
         <Text style={styles.buttonText}>Run</Text>
       </RectButton>
-      {isActive && (
-        <View style={styles.countContainer}>
-          <RectButton
-            style={styles.countButton}
-            onPress={decrementCount}
-            rippleColor="#DF3B0D60"
-          >
-            <Text style={styles.buttonText}>-</Text>
-          </RectButton>
-          <RectButton
-            style={styles.countButton}
-            onPress={incrementCount}
-            rippleColor="#DF3B0D60"
-          >
-            <Text style={styles.buttonText}>+</Text>
-          </RectButton>
-        </View>
-      )}
+      <Animated.View style={[styles.countContainer, centerContainer]}>
+        <RectButton
+          style={styles.countButton}
+          onPress={() => updateCountTarget(-1)}
+          rippleColor="#DF3B0D60"
+        >
+          <Text style={styles.buttonText}>-</Text>
+        </RectButton>
+        <RectButton
+          style={styles.countButton}
+          onPress={() => updateCountTarget(1)}
+          rippleColor="#DF3B0D60"
+        >
+          <Text style={styles.buttonText}>+</Text>
+        </RectButton>
+      </Animated.View>
     </>
   )
 }
